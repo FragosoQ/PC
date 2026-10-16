@@ -373,6 +373,18 @@ main {
   min-height: 0;
 }
 
+.zonas-grid.no-envolventes {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.zonas-grid.no-envolventes > [data-grid-area="cuba"] { grid-column: 1; grid-row: 1 / span 2; }
+.zonas-grid.no-envolventes > [data-grid-area="estrutura"] { grid-column: 2; grid-row: 1 / span 2; }
+.zonas-grid.no-envolventes > [data-grid-area="interior"] { grid-column: 3; grid-row: 1 / span 2; }
+.zonas-grid.no-envolventes > [data-grid-area="planeamento"] { grid-column: 4; grid-row: 1 / span 2; }
+.zonas-grid.no-envolventes > [data-grid-area="historico"] { grid-column: 5; grid-row: 1; }
+.zonas-grid.no-envolventes > [data-grid-area="prioridades"] { grid-column: 5; grid-row: 2; }
+
 .zona-card {
   display: flex; flex-direction: column;
   gap: clamp(4px, 0.8vh, 8px);
@@ -386,6 +398,8 @@ main {
   transition: border-color .3s, background .3s;
   min-width: 0;
 }
+
+.zona-card[hidden] { display: none; }
 
 .zona-card.done  { border-color: rgba(0,255,135,0.4);  background: rgba(0,255,135,0.08); }
 .zona-card.going { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.1); }
@@ -927,6 +941,16 @@ footer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: clamp(8px, 1.2vh, 12px) clamp(10px, 2vw, 14px);
     grid-auto-rows: minmax(0, auto);
+  }
+
+  .zonas-grid.no-envolventes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+  }
+
+  .zonas-grid.no-envolventes > [data-grid-area] {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .zona-card {
@@ -2035,12 +2059,13 @@ const statusEl = document.getElementById('statusLabel');
 const zg = document.getElementById('zonasGrid');
 
 const ZONA_CONFIGS = [
-  { nome: 'Cuba', tab: 'PC', header: 'CUBA', column: 'M', range: 'M1:M10', lotField: 'cuba' },
-  { nome: 'Estrutura', tab: 'PC', header: 'ESTRUTURA', column: 'N', range: 'N1:N10', lotField: 'estrutura' },
+  { nome: 'Cuba', tab: 'PC', header: 'CUBA', column: 'M', range: 'M1:M10', lotField: 'cuba', gridArea: 'cuba' },
+  { nome: 'Estrutura', tab: 'PC', header: 'ESTRUTURA', column: 'N', range: 'N1:N10', lotField: 'estrutura', gridArea: 'estrutura' },
   {
     nome: 'Planeamento',
     type: 'list',
     tall: true,
+    gridArea: 'planeamento',
     listSource: {
       tab: 'soldaduraEditávelMulti',
       header: 'LOTE',
@@ -2056,24 +2081,30 @@ const ZONA_CONFIGS = [
   {
     nome: 'Histórico',
     type: 'list',
+    gridArea: 'historico',
     listSource: {
-      tab: 'PA1',
-      range: 'D1:FV18',
-      mode: 'completed-priorities',
+      tab: 'PC',
+      range: 'L1:AC1000',
+      mode: 'completed-column-headers',
+      columns: ['X', 'Y', 'Z', 'AA', 'AB', 'AC'],
       hideHeader: true,
-      gridLayout: { cols: 4, rows: 3, flow: 'column' },
+      gridLayout: { cols: 3, rows: 2, flow: 'row' },
     },
   },
-  { nome: 'Envolventes', tab: 'PC', header: 'ENVOLVENTES', column: 'P', range: 'P1:P10', lotField: 'envolventes' },
-  { nome: 'Interior', tab: 'PC', header: 'INTERIOR', column: 'O', range: 'O1:O10', lotField: 'interior' },
+  { nome: 'Envolventes', tab: 'PC', header: 'ENVOLVENTES', column: 'P', range: 'P1:P10', lotField: 'envolventes', hideWhenEmpty: true, gridArea: 'envolventes' },
+  { nome: 'Interior', tab: 'PC', header: 'INTERIOR', column: 'O', range: 'O1:O10', lotField: 'interior', gridArea: 'interior' },
   {
-    nome: 'Prioridades Disponíveis',
+    nome: 'EM CURSO',
     type: 'list',
+    gridArea: 'prioridades',
     listSource: {
-      tab: 'PA1',
-      range: 'D1:CK8',
-      mode: 'completed-priority-headers',
+      tab: 'PC',
+      range: 'L1:AC1000',
+      mode: 'nonempty-column-headers',
+      columns: ['R', 'S', 'T', 'U', 'V', 'W'],
+      labels: ['T', 'CX', '1', '2', '3', '4'],
       hideHeader: true,
+      gridLayout: { cols: 3, rows: 2, flow: 'row' },
     },
   },
 ];
@@ -2308,6 +2339,39 @@ async function fetchZonaListValues(source) {
   };
   const table = await fetchSheetTable(cfg);
 
+  if (source.mode === 'completed-column-headers' || source.mode === 'nonempty-column-headers') {
+    if (!table || !Array.isArray(table.rows) || !table.rows[0]) return [];
+    const rangeStart = String(source.range || '').match(/^([A-Z]+)/i)?.[1];
+    const rangeStartIndex = columnLetterToIndex(rangeStart);
+    if (rangeStartIndex < 0) return [];
+
+    const values = [];
+    const seen = new Set();
+    source.columns.forEach((column, index) => {
+      const columnIndex = columnLetterToIndex(column) - rangeStartIndex;
+      if (columnIndex < 0) return;
+
+      const hasMatchingValue = table.rows.slice(1).some(row => {
+        const geral = getValueFromRow(row, 0);
+        if (geral == null || String(geral).trim() === '' || parseSheetPercentage(geral) === 100) return false;
+        const value = getValueFromRow(row, columnIndex);
+        if (source.mode === 'completed-column-headers') return isSheetPercentageComplete(value);
+        return value != null && String(value).trim() !== '';
+      });
+      if (!hasMatchingValue) return;
+
+      const header = getValueFromRow(table.rows[0], columnIndex);
+      const label = source.mode === 'nonempty-column-headers'
+        ? (source.labels?.[index] || String(header || '').replace(/\s*\[STATUS\]\s*$/i, '').trim())
+        : String(header || '').trim();
+      if (label && !seen.has(label)) {
+        seen.add(label);
+        values.push(label);
+      }
+    });
+    return values;
+  }
+
   if (source.mode === 'completed-priorities' || source.mode === 'completed-priority-headers') {
     if (!table || !Array.isArray(table.cols) || !Array.isArray(table.rows) || !table.rows[0]) {
       return [];
@@ -2472,6 +2536,7 @@ function buildZonaPctCard(config, rowData) {
   const col = bc(pct);
   const card = document.createElement('div');
   card.className = `zona-card ${cls}${config.tall ? ' tall' : ''}`;
+  if (config.gridArea) card.dataset.gridArea = config.gridArea;
   card.innerHTML = `
     <div class="zona-card-label">${escapeHtml(config.nome)}</div>
     <div class="zona-card-pct" style="color:${col || 'rgba(255,255,255,0.15)'}">${pct}%</div>
@@ -2492,6 +2557,7 @@ function buildZonaLotPctCard(config, records) {
   const cls = pcts.every(p => p === 100) ? 'done' : pcts.some(p => p > 0) ? 'going' : 'empty';
   const card = document.createElement('div');
   card.className = `zona-card ${cls}${config.tall ? ' tall' : ''}`;
+  if (config.gridArea) card.dataset.gridArea = config.gridArea;
   const colsHtml = records.map((r, i) => {
     const pct = pcts[i];
     const col = bc(pct);
@@ -2514,6 +2580,7 @@ function buildZonaListCard(config, items) {
   const cls = list.length > 0 ? 'going' : 'empty';
   const card = document.createElement('div');
   card.className = `zona-card list ${cls}${config.tall ? ' tall' : ''}`;
+  if (config.gridArea) card.dataset.gridArea = config.gridArea;
 
   // Cada item pode ser uma string (modo simples) ou um objecto { value, dim }
   // (quando há coluna auxiliar a controlar o "esbatido").
@@ -2571,6 +2638,15 @@ function buildZonaSingleCard(config, value) {
 }
 
 function renderZones(rowData) {
+  const cachedPcRecords = ZONA_LIST_CACHE['lots|pc'];
+  zg.classList.remove('no-envolventes');
+  if (Array.isArray(cachedPcRecords)) {
+    const hasEnvolventes = cachedPcRecords.some(record => {
+      const value = record.envolventes;
+      return value != null && String(value).trim() !== '';
+    });
+    zg.classList.toggle('no-envolventes', !hasEnvolventes);
+  }
   zg.innerHTML = '';
   ZONA_CONFIGS.forEach(config => {
     if (config.type === 'list') {
@@ -2581,6 +2657,8 @@ function renderZones(rowData) {
           ? `list|${src.tab}|${src.mode}|${src.range}`
           : src.mode === 'completed-priority-headers'
             ? `list|${src.tab}|${src.mode}|${src.range}`
+            : src.mode === 'completed-column-headers' || src.mode === 'nonempty-column-headers'
+              ? `list|${src.tab}|${src.mode}|${src.range}`
         : `list|${src.tab}|${src.column || src.header}`;
       const cached = ZONA_LIST_CACHE[cacheKey];
       const card = buildZonaListCard(config, cached);
@@ -2613,11 +2691,26 @@ function renderZones(rowData) {
       const cacheKey = 'lots|pc';
       const cached = ZONA_LIST_CACHE[cacheKey];
       const card = buildZonaLotPctCard(config, cached || null);
+      const cachedHasValue = Array.isArray(cached) && cached.some(record => {
+        const value = record[config.lotField];
+        return value != null && String(value).trim() !== '';
+      });
+      if (config.hideWhenEmpty && !cachedHasValue) card.hidden = true;
       zg.appendChild(card);
 
       fetchPcLotRecords().then(records => {
         ZONA_LIST_CACHE[cacheKey] = records;
-        card.replaceWith(buildZonaLotPctCard(config, records));
+        const hasValue = records.some(record => {
+          const value = record[config.lotField];
+          return value != null && String(value).trim() !== '';
+        });
+        if (config.hideWhenEmpty) zg.classList.toggle('no-envolventes', !hasValue);
+        if (config.hideWhenEmpty && !hasValue) {
+          card.remove();
+          return;
+        }
+        const fresh = buildZonaLotPctCard(config, records);
+        card.replaceWith(fresh);
       }).catch(err => console.warn(`Falha a carregar pct para "${config.nome}":`, err));
     } else if (config.tab) {
       // Card percentual lido de um separador específico.
