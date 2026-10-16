@@ -1301,13 +1301,6 @@ function formatSheetDate(value) {
   return date.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function addDaysToSheetDate(value, days) {
-  const date = parseSheetDate(value);
-  if (!date) return null;
-  date.setDate(date.getDate() + days);
-  return `Date(${date.getFullYear()},${date.getMonth()},${date.getDate()})`;
-}
-
 function getDaysDiff(dateValue1, dateValue2) {
   const date1 = parseSheetDate(dateValue1);
   const date2 = parseSheetDate(dateValue2);
@@ -2123,10 +2116,11 @@ const PA1_HISTORY_START_COLUMN = columnLetterToIndex('DW') - PA1_RANGE_START_COL
 const ZONA_LIST_CACHE = {};
 
 // Registos por lote (PC, uma linha por modelo/equipamento).
-const PC_LOT_RECORDS_RANGE = { tab: 'PC', range: 'B1:P1000' };
+const PC_LOT_RECORDS_RANGE = { tab: 'PC', range: 'B1:AD1000' };
 const PC_LOT_FIELDS = {
   lot: 'B',
   inicio: 'F',
+  previsto: 'AD',
   cuba: 'M',
   estrutura: 'N',
   interior: 'O',
@@ -2149,7 +2143,7 @@ function lotTag(record) {
   return `<span class="lot-tag">${escapeHtml(lotShortName(record.lot))}</span>`;
 }
 
-// Devolve os campos de cada lote; previsto é calculado como início + 5 dias.
+// Devolve os campos de cada lote, incluindo previsto em PC!AD.
 // De-dupe: várias chamadas no mesmo ciclo partilham o mesmo fetch.
 function fetchPcLotRecords() {
   if (pcLotRecordsInflight) return pcLotRecordsInflight;
@@ -2174,7 +2168,6 @@ function fetchPcLotRecords() {
           record[key] = getValueFromRow(row, offsets[key]);
         });
         record.lot = String(lot).trim();
-        record.previsto = addDaysToSheetDate(record.inicio, 5);
         // Mesmo índice de cor usado em loadAndRenderModelo
         const lotKey = normalizeModeloLote(record.lot);
         if (!firstIndexByKey.has(lotKey)) firstIndexByKey.set(lotKey, records.length);
