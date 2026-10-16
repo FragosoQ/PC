@@ -1094,7 +1094,7 @@ footer {
 <script>
 const SHEET_CONFIG_DEFAULT = {
   id: '1GQUB52a2gKR429bjqJrNkbP5rjR7Z_4v85z9M7_Cr8Y',
-  tab: 'PM1',
+  tab: 'PC',
   keyHeader: null,
   keyValue: null,
   targetHeader: 'EVOLUÇÃO',
@@ -1275,6 +1275,13 @@ function formatSheetDate(value) {
     return String(value);
   }
   return date.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function addDaysToSheetDate(value, days) {
+  const date = parseSheetDate(value);
+  if (!date) return null;
+  date.setDate(date.getDate() + days);
+  return `Date(${date.getFullYear()},${date.getMonth()},${date.getDate()})`;
 }
 
 function getDaysDiff(dateValue1, dateValue2) {
@@ -2002,9 +2009,8 @@ const bc = v => v === 100 ? '#00ff87' : v > 0 ? '#00d4ff' : null;
 
 /* ── CONFIGURAÇÃO DE SHEET ── */
 const SHEET_POLL_INTERVAL = 20000;
-// PS2 é a fonte primária (watcher detecta mudanças neste separador).
-// O renderSheetData re-fetch ao PS2 e a outros separadores via fetchSecondaryRowFields.
-const SHEET_CONFIG = { id: '1GQUB52a2gKR429bjqJrNkbP5rjR7Z_4v85z9M7_Cr8Y', tab: 'PS2' };
+// PC é a fonte primária (watcher detecta mudanças neste separador).
+const SHEET_CONFIG = { id: '1GQUB52a2gKR429bjqJrNkbP5rjR7Z_4v85z9M7_Cr8Y', tab: 'PC' };
 
 const FALLBACK_EV = 46;
 const evEl = document.getElementById('evNum');
@@ -2029,8 +2035,8 @@ const statusEl = document.getElementById('statusLabel');
 const zg = document.getElementById('zonasGrid');
 
 const ZONA_CONFIGS = [
-  { nome: 'Cuba', tab: 'PA1', header: 'CUBA', column: 'O', range: 'O1:O10', lotField: 'cuba' },
-  { nome: 'Estrutura', tab: 'PA1', header: 'ESTRUTURA', column: 'P', range: 'P1:P10', lotField: 'estrutura' },
+  { nome: 'Cuba', tab: 'PC', header: 'CUBA', column: 'M', range: 'M1:M10', lotField: 'cuba' },
+  { nome: 'Estrutura', tab: 'PC', header: 'ESTRUTURA', column: 'N', range: 'N1:N10', lotField: 'estrutura' },
   {
     nome: 'Planeamento',
     type: 'list',
@@ -2058,8 +2064,8 @@ const ZONA_CONFIGS = [
       gridLayout: { cols: 4, rows: 3, flow: 'column' },
     },
   },
-  { nome: 'Envolventes', tab: 'PA1', header: 'Envolventes', column: 'R', range: 'R1:R10', lotField: 'envolventes' },
-  { nome: 'Interior', tab: 'PA1', header: 'INTERIOR', column: 'Q', range: 'Q1:Q10', lotField: 'interior' },
+  { nome: 'Envolventes', tab: 'PC', header: 'ENVOLVENTES', column: 'P', range: 'P1:P10', lotField: 'envolventes' },
+  { nome: 'Interior', tab: 'PC', header: 'INTERIOR', column: 'O', range: 'O1:O10', lotField: 'interior' },
   {
     nome: 'Prioridades Disponíveis',
     type: 'list',
@@ -2085,22 +2091,18 @@ const PA1_HISTORY_START_COLUMN = columnLetterToIndex('DW') - PA1_RANGE_START_COL
 // Cache simples para a lista de lotes — partilhado pelo refresh periódico
 const ZONA_LIST_CACHE = {};
 
-// ── Registos por lote (PA1, uma linha por MODELO / EQUIPAMENTO) ──
-// Quando há mais do que um lote em PA1!D, Cuba/Estrutura/Envolventes/Interior,
-// Evolução Global, Prazo, Início e Previsto dividem-se em N colunas, lidas da
-// mesma linha de cada lote e pela mesma ordem da lista de Modelo / Equipamento.
-const PA1_LOT_RECORDS_RANGE = { tab: 'PA1', range: 'D1:AK1000' };
-const PA1_LOT_FIELDS = {
-  lot: 'D',
-  previsto: 'F',
-  inicio: 'J',
-  cuba: 'O',
-  estrutura: 'P',
-  interior: 'Q',
-  envolventes: 'R',
-  geral: 'AK',
+// Registos por lote (PC, uma linha por modelo/equipamento).
+const PC_LOT_RECORDS_RANGE = { tab: 'PC', range: 'B1:P1000' };
+const PC_LOT_FIELDS = {
+  lot: 'B',
+  inicio: 'F',
+  cuba: 'M',
+  estrutura: 'N',
+  interior: 'O',
+  envolventes: 'P',
+  geral: 'L',
 };
-let pa1LotRecordsInflight = null;
+let pcLotRecordsInflight = null;
 
 function lotColor(lotIndex) {
   return LOT_COLORS[(lotIndex || 0) % LOT_COLORS.length];
@@ -2116,17 +2118,17 @@ function lotTag(record) {
   return `<span class="lot-tag">${escapeHtml(lotShortName(record.lot))}</span>`;
 }
 
-// Devolve [{ lot, lotIndex, previsto, inicio, cuba, ..., geral }], um por lote.
+// Devolve os campos de cada lote; previsto é calculado como início + 5 dias.
 // De-dupe: várias chamadas no mesmo ciclo partilham o mesmo fetch.
-function fetchPa1LotRecords() {
-  if (pa1LotRecordsInflight) return pa1LotRecordsInflight;
-  pa1LotRecordsInflight = fetchSheetTable({ id: SHEET_CONFIG_DEFAULT.id, ...PA1_LOT_RECORDS_RANGE })
+function fetchPcLotRecords() {
+  if (pcLotRecordsInflight) return pcLotRecordsInflight;
+  pcLotRecordsInflight = fetchSheetTable({ id: SHEET_CONFIG_DEFAULT.id, ...PC_LOT_RECORDS_RANGE })
     .then(table => {
       const rows = table && Array.isArray(table.rows) ? table.rows : [];
-      const startIdx = columnLetterToIndex('D');
+      const startIdx = columnLetterToIndex('B');
       const offsets = {};
-      Object.keys(PA1_LOT_FIELDS).forEach(key => {
-        offsets[key] = columnLetterToIndex(PA1_LOT_FIELDS[key]) - startIdx;
+      Object.keys(PC_LOT_FIELDS).forEach(key => {
+        offsets[key] = columnLetterToIndex(PC_LOT_FIELDS[key]) - startIdx;
       });
       const firstIndexByKey = new Map();
       const records = [];
@@ -2134,11 +2136,14 @@ function fetchPa1LotRecords() {
       rows.slice(1).forEach(row => {
         const lot = getValueFromRow(row, offsets.lot);
         if (lot == null || String(lot).trim() === '') return;
+        const geral = getValueFromRow(row, offsets.geral);
+        if (geral == null || String(geral).trim() === '' || parseSheetPercentage(geral) === 100) return;
         const record = {};
         Object.keys(offsets).forEach(key => {
           record[key] = getValueFromRow(row, offsets[key]);
         });
         record.lot = String(lot).trim();
+        record.previsto = addDaysToSheetDate(record.inicio, 5);
         // Mesmo índice de cor usado em loadAndRenderModelo
         const lotKey = normalizeModeloLote(record.lot);
         if (!firstIndexByKey.has(lotKey)) firstIndexByKey.set(lotKey, records.length);
@@ -2147,11 +2152,11 @@ function fetchPa1LotRecords() {
       });
       return records;
     })
-    .finally(() => { pa1LotRecordsInflight = null; });
-  return pa1LotRecordsInflight;
+    .finally(() => { pcLotRecordsInflight = null; });
+  return pcLotRecordsInflight;
 }
 
-// Modelo+Lote carregados de PA1!D e usados para destacar Planeamento.
+// Modelo+Lote carregados de PC!D e usados para destacar Planeamento.
 let currentModeloLotes = new Map();
 
 // Normaliza uma string para comparação de "modelo - lote":
@@ -2477,7 +2482,7 @@ function buildZonaPctCard(config, rowData) {
 }
 
 // Card percentual dividido em N colunas (uma por lote).
-// `records` vem de fetchPa1LotRecords; com 0/1 lotes usa o card normal.
+// `records` vem de fetchPcLotRecords; com 0/1 lotes usa o card normal.
 function buildZonaLotPctCard(config, records) {
   if (!Array.isArray(records) || records.length <= 1) {
     const raw = records && records[0] ? records[0][config.lotField] : null;
@@ -2604,13 +2609,13 @@ function renderZones(rowData) {
         card.replaceWith(fresh);
       }).catch(err => console.warn(`Falha a carregar valor para "${config.nome}":`, err));
     } else if (config.lotField) {
-      // Card percentual por lote (PA1): divide-se em N colunas se houver vários lotes.
-      const cacheKey = 'lots|pa1';
+      // Card percentual por lote (PC): divide-se em N colunas se houver vários lotes.
+      const cacheKey = 'lots|pc';
       const cached = ZONA_LIST_CACHE[cacheKey];
       const card = buildZonaLotPctCard(config, cached || null);
       zg.appendChild(card);
 
-      fetchPa1LotRecords().then(records => {
+      fetchPcLotRecords().then(records => {
         ZONA_LIST_CACHE[cacheKey] = records;
         card.replaceWith(buildZonaLotPctCard(config, records));
       }).catch(err => console.warn(`Falha a carregar pct para "${config.nome}":`, err));
@@ -2801,12 +2806,28 @@ function renderMultiDates(records) {
 
 function renderMultiEvolucao(records) {
   if (!evEl) return;
+  const activeRecords = records.map(record => ({
+    record,
+    pct: parseSheetPercentage(record.geral),
+  })).filter(({ pct }) => pct != null && pct !== 100);
+
+  if (!activeRecords.length) {
+    resetSingleEvolucao();
+    updateEvolucao(records.length ? 100 : 0);
+    return;
+  }
+  if (activeRecords.length === 1) {
+    resetSingleEvolucao();
+    updateEvolucao(activeRecords[0].pct);
+    return;
+  }
+
   evEl.classList.add('is-multi', 'lot-cols');
-  evEl.style.setProperty('--cols', records.length);
+  evEl.style.setProperty('--cols', activeRecords.length);
   evEl.style.color = '';
   evEl.style.textShadow = '';
-  evEl.innerHTML = records.map(r => {
-    const pct = parseSheetPercentage(r.geral) || 0;
+  evEl.innerHTML = activeRecords.map(({ record, pct }) => {
+    const r = record;
     const c = ec(pct);
     return `<div class="lot-col" style="--lot-color:${lotColor(r.lotIndex)};color:${c};text-shadow:0 0 60px ${c}40" title="${escapeHtml(r.lot)}">${lotTag(r)}<span>${pct}%</span></div>`;
   }).join('');
@@ -2829,22 +2850,12 @@ const PAIS_PLACEHOLDER = '- · -';
 // Lido por range explícito: o gviz omite linhas vazias quando se pede o separador
 // inteiro, pelo que o índice da linha deixa de corresponder ao número da linha na Sheet.
 const PAIS_RANGE = { tab: 'montagemEditável', range: 'L22:M26' };
-const MODELO_LOTES_RANGE = { tab: 'PA1', range: 'D1:D1000' };
 
 function loadAndRenderModelo() {
   if (!modelEl) return Promise.resolve();
 
-  return fetchSheetTable({ id: SHEET_CONFIG_DEFAULT.id, ...MODELO_LOTES_RANGE }).then(table => {
-    const rows = table && Array.isArray(table.rows) ? table.rows : [];
-    const header = rows.length ? getValueFromRow(rows[0], 0) : null;
-    if (normalizeString(header) !== 'lote') {
-      throw new Error('Cabeçalho LOTE não encontrado em PA1!D1:D1000');
-    }
-
-    const values = rows.slice(1)
-      .map(row => getValueFromRow(row, 0))
-      .filter(value => value != null && String(value).trim() !== '')
-      .map(value => String(value).trim());
+  return fetchPcLotRecords().then(records => {
+    const values = records.map(record => record.lot);
     currentModeloLotes = new Map();
     values.forEach((value, index) => {
       const lotKey = normalizeModeloLote(value);
@@ -2869,7 +2880,7 @@ function loadAndRenderModelo() {
     }
     applyActiveHighlight();
   }).catch(error => {
-    console.warn('Falha a carregar valores de LOTE em PA1:', error);
+    console.warn('Falha a carregar valores de LOTE em PC:', error);
     currentModeloLotes = new Map();
     modelEl.classList.remove('is-list');
     modelEl.textContent = MODEL_PLACEHOLDER;
@@ -2954,25 +2965,25 @@ function loadAndRenderPaises() {
   });
 }
 
-// Início (PA1!J1) e Previsto (PA1!F1); modelo/lote e estado vêm de PS2.
-function refreshPs1Details() {
+// Datas, modelo/lote e estado vêm do separador PC.
+function refreshPcDetails() {
   const DATE_PLACEHOLDER = '-- / -- / ----';
 
   return Promise.all([
-    fetchSecondaryRangeValue('PA1', 'J1:J10'),
-    fetchSecondaryRangeValue('PA1', 'F1:F10'),
-    fetchSecondaryRowFields('PS2', {
-      modeloLote: { header: 'LOTE', column: 'D' },
+    fetchSecondaryRowFields('PC', {
+      modeloLote: { header: 'LOTE', column: 'B' },
       chaveProcura: { header: 'Chave de Procura', column: 'A' },
     }),
-    fetchPa1LotRecords().catch(err => {
-      console.warn('Falha a carregar registos por lote do PA1:', err);
+    fetchPcLotRecords().catch(err => {
+      console.warn('Falha a carregar registos por lote do PC:', err);
       return [];
     }),
-  ]).then(([inicio, previsto, { modeloLote, chaveProcura }, lotRecords]) => {
+  ]).then(([{ modeloLote, chaveProcura }, lotRecords]) => {
     modelDataAvailable = modeloLote != null && String(modeloLote).trim() !== '';
     loadAndRenderPaises();
     updateStatus(chaveProcura);
+    const inicio = lotRecords[0]?.inicio;
+    const previsto = lotRecords[0]?.previsto;
 
     // Vários lotes: Prazo, Início e Previsto divididos em N colunas
     if (lotRecords.length > 1) {
@@ -2993,7 +3004,7 @@ function refreshPs1Details() {
     renderText(dataPrevistaEl, previstoFmt, DATE_PLACEHOLDER);
     updateDeadline(inicio, previsto);
   }).catch(err => {
-    console.warn('Falha a carregar datas do PA1 ou dados do PS2:', err);
+    console.warn('Falha a carregar dados do PC:', err);
     setLotLayoutMulti(false);
     modelDataAvailable = false;
     loadAndRenderPaises();
@@ -3010,56 +3021,30 @@ function renderSheetData(sheetRow) {
   if (!sheetRow) return;
   lastSheetRow = sheetRow;
 
-  // Datas vêm do PA1 e modelo/lote vêm do PS2 (refreshPs1Details)
-  // Evolução Global vem do PS2!AK (refreshPs1Fields)
+  // Datas, modelo/lote e evolução vêm do PC.
   // Países vêm de montagemEditável (refrescados pelo seu próprio watcher — ver loadAndRenderPaises)
-  refreshPs1Details();
-  refreshPs1Fields();
+  refreshPcDetails();
+  refreshPcFields();
   renderZones(sheetRow);
 }
 
-async function fetchPs1Summary() {
-  return fetchSecondaryRangeValue('PA1', 'AK1:AK1000');
-}
-
-function refreshPs1Fields() {
-  return fetchPa1LotRecords().catch(err => {
-    console.warn('Falha a carregar registos por lote do PA1:', err);
+function refreshPcFields() {
+  return fetchPcLotRecords().catch(err => {
+    console.warn('Falha a carregar registos por lote do PC:', err);
     return [];
   }).then(lotRecords => {
-    // Vários lotes: Evolução Global dividida em N colunas
-    if (lotRecords.length > 1) {
-      renderMultiEvolucao(lotRecords);
-      return;
-    }
-    resetSingleEvolucao();
-    return refreshSingleEvolucao();
-  });
-}
-
-function refreshSingleEvolucao() {
-  return fetchPs1Summary().then(geral => {
-    const geralPct = parseSheetPercentage(geral);
-    if (geralPct == null) {
-      console.warn('[evolução] valor de GERAL (PA1!AK) não parseável:', geral);
-    } else {
-      console.log('[evolução] GERAL (PA1!AK) =', geral, '→', geralPct, '%');
-    }
-    updateEvolucao(geralPct != null ? geralPct : 0);
-  }).catch(err => {
-    console.warn('Falha a carregar evolução do PA1:', err);
-    updateEvolucao(0);
+    renderMultiEvolucao(lotRecords);
   });
 }
 
 function initializeSheetWatcher() {
-  // Watcher principal: PS2 (fonte primária — ao mudar dispara re-render completo)
-  const stopPs1 = watchSheetRow(SHEET_CONFIG, renderSheetData, SHEET_POLL_INTERVAL);
+  // Watcher principal: PC (ao mudar dispara re-render completo)
+  const stopPc = watchSheetRow(SHEET_CONFIG, renderSheetData, SHEET_POLL_INTERVAL);
 
-  // Watcher PA1 (lotes + campos por lote): actualiza Modelo / Equipamento e,
+  // Watcher PC (lotes + campos por lote): actualiza Modelo / Equipamento e,
   // como o número de lotes define as colunas, re-renderiza zonas/prazo/datas/evolução.
   const stopModelos = watchSheetTab(
-    { id: SHEET_CONFIG_DEFAULT.id, ...PA1_LOT_RECORDS_RANGE },
+    { id: SHEET_CONFIG_DEFAULT.id, ...PC_LOT_RECORDS_RANGE },
     () => {
       loadAndRenderModelo();
       if (lastSheetRow) renderSheetData(lastSheetRow);
@@ -3075,7 +3060,7 @@ function initializeSheetWatcher() {
   );
 
   window.addEventListener('beforeunload', () => {
-    stopPs1();
+    stopPc();
     stopModelos();
     stopPaises();
   });
