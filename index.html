@@ -366,7 +366,7 @@ main {
 .zonas-grid {
   display: grid;
   /* 4 colunas: zonas e planeamento à esquerda; histórico e prioridades à direita. */
-  grid-template-columns: 0.85832fr 0.92916fr 1.22452fr 0.988fr;
+  grid-template-columns: 0.89374fr 0.89374fr 1.22452fr 0.988fr;
   grid-auto-rows: 1fr;
   gap: clamp(10px, 1.6vh, 16px) clamp(14px, 2vw, 24px);
   flex: 1;
@@ -374,7 +374,7 @@ main {
 }
 
 .zonas-grid.no-envolventes {
-  grid-template-columns: 0.8845fr 0.8845fr 1fr 1.331fr 0.9fr;
+  grid-template-columns: 0.923fr 0.923fr 0.923fr 1.331fr 0.9fr;
   grid-template-rows: repeat(2, minmax(0, 1fr));
 }
 
@@ -385,7 +385,7 @@ main {
 .zonas-grid.no-envolventes > [data-grid-area="historico"] { grid-column: 5; grid-row: 1; }
 .zonas-grid.no-envolventes > [data-grid-area="prioridades"] { grid-column: 5; grid-row: 2; }
 
-.zonas-grid.no-envolventes.has-subcontratacao { grid-template-columns: 0.8845fr 0.8845fr 1fr 1fr 1.331fr 0.9fr; }
+.zonas-grid.no-envolventes.has-subcontratacao { grid-template-columns: 0.923fr 0.923fr 0.923fr 1fr 1.331fr 0.9fr; }
 .zonas-grid.no-envolventes.has-subcontratacao > [data-grid-area="subcontratacao"] { grid-column: 4; grid-row: 1 / span 2; }
 .zonas-grid.no-envolventes.has-subcontratacao > [data-grid-area="planeamento"] { grid-column: 5; grid-row: 1 / span 2; }
 .zonas-grid.no-envolventes.has-subcontratacao > [data-grid-area="historico"] { grid-column: 6; grid-row: 1; }
