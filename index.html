@@ -2128,12 +2128,12 @@ const ZONA_CONFIGS = [
       range: 'B1:B11',
       header: 'LOTE',
       column: 'B',
-      // Lotes com GERAL a 100% em PC ficam visualmente esbatidos.
+      // Lotes com a coluna G preenchida em PC ficam visualmente esbatidos.
       dimTab: 'PC',
       dimKeyHeader: 'LOTE',
       dimKeyColumn: 'B',
-      dimHeader: 'GERAL',
-      dimColumn: 'L',
+      dimColumn: 'G',
+      dimMode: 'nonempty',
       hideHeader: true,
       limit: 10,
       gridLayout: { cols: 2, rows: 5, flow: 'column' },
@@ -2602,12 +2602,17 @@ async function fetchZonaListValues(source) {
     const keyIndex = findSheetCell(dimTable, source.dimKeyHeader, source.dimKeyColumn);
     const dimIndex = findSheetCell(dimTable, source.dimHeader, source.dimColumn);
     if (keyIndex < 0 || dimIndex < 0 || !Array.isArray(dimTable.rows)) {
-      throw new Error(`Não foi possível localizar ${source.dimKeyHeader} e ${source.dimHeader} no separador ${source.dimTab}`);
+      const dimLabel = source.dimHeader || `coluna ${source.dimColumn}`;
+      throw new Error(`Não foi possível localizar ${source.dimKeyHeader} e ${dimLabel} no separador ${source.dimTab}`);
     }
     dimmedKeys = new Set();
     dimTable.rows.forEach(row => {
       const key = getValueFromRow(row, keyIndex);
-      if (key != null && isSheetPercentageComplete(getValueFromRow(row, dimIndex))) {
+      const dimValue = getValueFromRow(row, dimIndex);
+      const shouldDim = source.dimMode === 'nonempty'
+        ? dimValue != null && String(dimValue).trim() !== ''
+        : isSheetPercentageComplete(dimValue);
+      if (key != null && shouldDim) {
         dimmedKeys.add(normalizeModeloLote(key));
       }
     });
