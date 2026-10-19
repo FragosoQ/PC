@@ -747,6 +747,41 @@ main {
   align-items: center;
   padding-top: clamp(6px, 1vh, 12px);
 }
+.active-priorities {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(4px, 0.6vh, 7px);
+  width: min(92%, 720px);
+  max-height: 14vh;
+  overflow-y: auto;
+  z-index: 1;
+}
+.active-priorities[hidden] { display: none; }
+.active-priorities-title {
+  font-size: clamp(9px, 1.1vh, 12px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.65);
+}
+.active-priorities-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(4px, 0.5vw, 8px);
+}
+.active-priority {
+  padding: 3px clamp(7px, 0.7vw, 11px);
+  border: 1px solid rgba(255,255,255,0.24);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: var(--priority-color, #8fe7ff);
+  font-size: clamp(10px, 1.25vh, 14px);
+  font-weight: 700;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
 
 /* Prazo */
 .prazo-multi .lot-col { align-items: center; gap: clamp(4px, 0.6vh, 8px); }
@@ -1026,9 +1061,9 @@ footer {
     </div>
 
     <div class="h-center">
-      <span class="h-badge">Acabamento</span>
+      <span class="h-badge">CORTE</span>
       <div class="h-sep"></div>
-      <span class="h-badge">Posto Corte</span>
+      <span class="h-badge">Posto 1</span>
     </div>
 
     <span class="h-time" id="htime">—</span>
@@ -1077,6 +1112,7 @@ footer {
         <div style="font-size:clamp(14px,1.8vh,20px);font-weight:700;letter-spacing:5px;text-transform:uppercase;color:rgba(255,255,255,0.75);">Evolução Global</div>
         <div id="evNum" style="font-family:'Bebas Neue',sans-serif;font-size:clamp(140px,22vh,340px);line-height:.85;letter-spacing:-2px;">46%</div>
         <div id="statusLabel" style="font-size:clamp(15px,2vh,22px);letter-spacing:4px;color:rgba(255,255,255,0.75);text-transform:uppercase;">Em Curso · ON</div>
+        <div id="activePriorities" class="active-priorities" aria-live="polite" hidden></div>
       </div>
 
       <!-- PRAZO -->
@@ -2057,6 +2093,7 @@ const SHEET_CONFIG = { id: '1GQUB52a2gKR429bjqJrNkbP5rjR7Z_4v85z9M7_Cr8Y', tab: 
 
 const FALLBACK_EV = 46;
 const evEl = document.getElementById('evNum');
+const activePrioritiesEl = document.getElementById('activePriorities');
 const modelEl = document.querySelector('.id-modelo');
 let modelDataAvailable = false;
 const MODEL_PLACEHOLDER = '—';
@@ -2158,7 +2195,21 @@ const PC_LOT_FIELDS = {
   envolventes: 'P',
   subcontratacao: 'Q',
   geral: 'L',
+  prioridadeT: 'R',
+  prioridadeCX: 'S',
+  prioridade1: 'T',
+  prioridade2: 'U',
+  prioridade3: 'V',
+  prioridade4: 'W',
 };
+const ACTIVE_PRIORITY_FIELDS = [
+  { field: 'prioridadeT', label: 'T' },
+  { field: 'prioridadeCX', label: 'CX' },
+  { field: 'prioridade1', label: '1' },
+  { field: 'prioridade2', label: '2' },
+  { field: 'prioridade3', label: '3' },
+  { field: 'prioridade4', label: '4' },
+];
 let pcLotRecordsInflight = null;
 
 function lotColor(lotIndex) {
@@ -2960,6 +3011,7 @@ function renderMultiDates(records) {
 
 function renderMultiEvolucao(records) {
   if (!evEl) return;
+  renderActivePriorities(records);
   const activeRecords = records.map(record => ({
     record,
     pct: parseSheetPercentage(record.geral),
@@ -2985,6 +3037,30 @@ function renderMultiEvolucao(records) {
     const c = ec(pct);
     return `<div class="lot-col" style="--lot-color:${lotColor(r.lotIndex)};color:${c};text-shadow:0 0 60px ${c}40" title="${escapeHtml(r.lot)}">${lotTag(r)}<span>${pct}%</span></div>`;
   }).join('');
+}
+
+function renderActivePriorities(records) {
+  if (!activePrioritiesEl) return;
+  const hasMultipleLots = records.length > 1;
+  const priorities = records.flatMap(record => ACTIVE_PRIORITY_FIELDS.flatMap(({ field, label }) => {
+    const pct = parseSheetPercentage(record[field]);
+    if (pct == null || pct < 0 || pct >= 100) return [];
+    return [{ record, label, pct }];
+  }));
+
+  activePrioritiesEl.hidden = priorities.length === 0;
+  if (!priorities.length) {
+    activePrioritiesEl.innerHTML = '';
+    return;
+  }
+
+  const badges = priorities.map(({ record, label, pct }) => {
+    const lot = hasMultipleLots ? `${lotShortName(record.lot)} · ` : '';
+    return `<span class="active-priority" style="--priority-color:${lotColor(record.lotIndex)}">${escapeHtml(lot)}${escapeHtml(label)} · ${pct}%</span>`;
+  }).join('');
+  activePrioritiesEl.innerHTML = `
+    <span class="active-priorities-title">Prioridades em curso</span>
+    <div class="active-priorities-list">${badges}</div>`;
 }
 
 function resetSingleEvolucao() {
