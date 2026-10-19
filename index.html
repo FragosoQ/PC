@@ -451,8 +451,15 @@ main {
   gap: clamp(0px, 0.15vh, 2px);
 }
 .zona-card[data-grid-area="planeamento"] .zona-card-list-item {
-  font-size: clamp(10px, 1.3vh, 14px);
-  line-height: 1.1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-size: clamp(14px, 1.8vh, 20px);
+  line-height: 1.05;
   letter-spacing: 0.2px;
 }
 .zona-card-list-header {
