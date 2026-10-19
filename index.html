@@ -752,6 +752,7 @@ main {
   flex-direction: column;
   align-items: center;
   gap: clamp(4px, 0.6vh, 7px);
+  margin-top: clamp(10px, 1.8vh, 20px);
   width: min(92%, 720px);
   max-height: 14vh;
   overflow-y: auto;
@@ -2436,7 +2437,7 @@ async function fetchZonaListValues(source) {
         if (geral == null || String(geral).trim() === '' || parseSheetPercentage(geral) === 100) return false;
         const value = getValueFromRow(row, columnIndex);
         if (source.mode === 'completed-column-headers') return isSheetPercentageComplete(value);
-        return value != null && String(value).trim() !== '';
+        return parseSheetPercentage(value) > 0;
       });
       if (!hasMatchingValue) return;
 
@@ -3044,7 +3045,7 @@ function renderActivePriorities(records) {
   const hasMultipleLots = records.length > 1;
   const priorities = records.flatMap(record => ACTIVE_PRIORITY_FIELDS.flatMap(({ field, label }) => {
     const pct = parseSheetPercentage(record[field]);
-    if (pct == null || pct < 0 || pct >= 100) return [];
+    if (pct == null || pct <= 0 || pct >= 100) return [];
     return [{ record, label, pct }];
   }));
 
