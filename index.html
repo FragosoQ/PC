@@ -365,7 +365,7 @@ main {
 
 .zonas-grid {
   display: grid;
-  /* 4 colunas: Cuba/Envolv | Estrutura/Interior | Planeamento (-2%) | Histórico/Prox.Pri (+2%) */
+  /* 4 colunas: zonas e planeamento à esquerda; histórico e prioridades à direita. */
   grid-template-columns: 1fr 1fr 0.92fr 1.08fr;
   grid-auto-rows: 1fr;
   gap: clamp(10px, 1.6vh, 16px) clamp(14px, 2vw, 24px);
@@ -384,6 +384,12 @@ main {
 .zonas-grid.no-envolventes > [data-grid-area="planeamento"] { grid-column: 4; grid-row: 1 / span 2; }
 .zonas-grid.no-envolventes > [data-grid-area="historico"] { grid-column: 5; grid-row: 1; }
 .zonas-grid.no-envolventes > [data-grid-area="prioridades"] { grid-column: 5; grid-row: 2; }
+
+.zonas-grid.no-envolventes.has-subcontratacao { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.zonas-grid.no-envolventes.has-subcontratacao > [data-grid-area="subcontratacao"] { grid-column: 4; grid-row: 1 / span 2; }
+.zonas-grid.no-envolventes.has-subcontratacao > [data-grid-area="planeamento"] { grid-column: 5; grid-row: 1 / span 2; }
+.zonas-grid.no-envolventes.has-subcontratacao > [data-grid-area="historico"] { grid-column: 6; grid-row: 1; }
+.zonas-grid.no-envolventes.has-subcontratacao > [data-grid-area="prioridades"] { grid-column: 6; grid-row: 2; }
 
 .zona-card {
   display: flex; flex-direction: column;
@@ -440,6 +446,14 @@ main {
 }
 .zona-card.list .zona-card-label {
   margin-bottom: clamp(2px, 0.4vh, 4px);
+}
+.zona-card[data-grid-area="planeamento"] .zona-card-list-items {
+  gap: clamp(0px, 0.15vh, 2px);
+}
+.zona-card[data-grid-area="planeamento"] .zona-card-list-item {
+  font-size: clamp(10px, 1.3vh, 14px);
+  line-height: 1.1;
+  letter-spacing: 0.2px;
 }
 .zona-card-list-header {
   font-size: clamp(10px, 1.2vh, 12px);
@@ -948,6 +962,11 @@ footer {
     grid-template-rows: none;
   }
 
+  .zonas-grid.no-envolventes.has-subcontratacao {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+  }
+
   .zonas-grid.no-envolventes > [data-grid-area] {
     grid-column: auto;
     grid-row: auto;
@@ -1000,9 +1019,9 @@ footer {
     </div>
 
     <div class="h-center">
-      <span class="h-badge">CORTE</span>
+      <span class="h-badge">Acabamento</span>
       <div class="h-sep"></div>
-      <span class="h-badge">Posto 1</span>
+      <span class="h-badge">Posto Corte</span>
     </div>
 
     <span class="h-time" id="htime">—</span>
@@ -2060,15 +2079,19 @@ const ZONA_CONFIGS = [
     tall: true,
     gridArea: 'planeamento',
     listSource: {
-      tab: 'soldaduraEditávelMulti',
+      tab: 'PC',
+      range: 'B1:B11',
       header: 'LOTE',
-      column: 'D',
-      // Lotes cuja coluna K (FIM SOLDADURA / ACABAMENTO) já está preenchida
-      // ficam visualmente esbatidos (concluídos).
-      dimHeader: 'FIM SOLDADURA / ACABAMENTO',
-      dimColumn: 'K',
+      column: 'B',
+      // Lotes com GERAL a 100% em PC ficam visualmente esbatidos.
+      dimTab: 'PC',
+      dimKeyHeader: 'LOTE',
+      dimKeyColumn: 'B',
+      dimHeader: 'GERAL',
+      dimColumn: 'L',
       hideHeader: true,
-      limit: 5,
+      limit: 10,
+      gridLayout: { cols: 2, rows: 5, flow: 'column' },
     },
   },
   {
@@ -2086,6 +2109,7 @@ const ZONA_CONFIGS = [
   },
   { nome: 'Envolventes', tab: 'PC', header: 'ENVOLVENTES', column: 'P', range: 'P1:P10', lotField: 'envolventes', hideWhenEmpty: true, gridArea: 'envolventes' },
   { nome: 'Interior', tab: 'PC', header: 'INTERIOR', column: 'O', range: 'O1:O10', lotField: 'interior', gridArea: 'interior' },
+  { nome: 'Subcontratação', tab: 'PC', header: 'SUBCONTRATAÇÃO', column: 'Q', range: 'Q1:Q10', lotField: 'subcontratacao', hideWhenZero: true, gridArea: 'subcontratacao' },
   {
     nome: 'EM CURSO',
     type: 'list',
@@ -2125,6 +2149,7 @@ const PC_LOT_FIELDS = {
   estrutura: 'N',
   interior: 'O',
   envolventes: 'P',
+  subcontratacao: 'Q',
   geral: 'L',
 };
 let pcLotRecordsInflight = null;
@@ -2141,6 +2166,10 @@ function lotShortName(lot) {
 
 function lotTag(record) {
   return `<span class="lot-tag">${escapeHtml(lotShortName(record.lot))}</span>`;
+}
+
+function hasZoneProgress(records, lotField) {
+  return Array.isArray(records) && records.some(record => parseSheetPercentage(record[lotField]) > 0);
 }
 
 // Devolve os campos de cada lote, incluindo previsto em PC!AD.
@@ -2489,22 +2518,50 @@ async function fetchZonaListValues(source) {
 
   // Modo default: percorre as primeiras linhas de uma única coluna
   // Modo default: percorre as primeiras linhas de uma única coluna.
-  // Se `dimColumn`/`dimHeader` for fornecido, cada item vem como { value, dim }
-  // onde dim=true se a célula da coluna de "dim" nessa mesma linha não estiver vazia.
-  const colIndex = findSheetCell(table, source.header, source.column);
+  // `dimColumn`/`dimHeader` marca itens pela mesma linha; `dimTab` permite
+  // procurar a condição por uma chave correspondente noutro separador.
+  const rangeStart = String(source.range || '').match(/^([A-Z]+)\d+:/i)?.[1];
+  const colIndex = rangeStart
+    ? columnLetterToIndex(source.column) - columnLetterToIndex(rangeStart)
+    : findSheetCell(table, source.header, source.column);
   if (colIndex < 0 || !Array.isArray(table.rows)) {
     return [];
   }
-  const dimColIndex = (source.dimColumn || source.dimHeader)
+  const firstDataRow = rangeStart ? 1 : 0;
+  if (rangeStart) {
+    const rangeHeader = getValueFromRow(table.rows[0], colIndex);
+    if (normalizeString(rangeHeader) !== normalizeString(source.header)) {
+      throw new Error(`Cabeçalho "${source.header}" não encontrado no intervalo ${source.range} do separador ${source.tab}`);
+    }
+  }
+  const dimColIndex = !source.dimTab && (source.dimColumn || source.dimHeader)
     ? findSheetCell(table, source.dimHeader, source.dimColumn)
     : -1;
+  let dimmedKeys = null;
+  if (source.dimTab) {
+    const dimTable = await fetchSecondaryTable(source.dimTab);
+    const keyIndex = findSheetCell(dimTable, source.dimKeyHeader, source.dimKeyColumn);
+    const dimIndex = findSheetCell(dimTable, source.dimHeader, source.dimColumn);
+    if (keyIndex < 0 || dimIndex < 0 || !Array.isArray(dimTable.rows)) {
+      throw new Error(`Não foi possível localizar ${source.dimKeyHeader} e ${source.dimHeader} no separador ${source.dimTab}`);
+    }
+    dimmedKeys = new Set();
+    dimTable.rows.forEach(row => {
+      const key = getValueFromRow(row, keyIndex);
+      if (key != null && isSheetPercentageComplete(getValueFromRow(row, dimIndex))) {
+        dimmedKeys.add(normalizeModeloLote(key));
+      }
+    });
+  }
   const limit = Math.max(1, source.limit || 5);
   const values = [];
-  for (let i = 0; i < table.rows.length && values.length < limit; i += 1) {
+  for (let i = firstDataRow; i < table.rows.length && values.length < limit; i += 1) {
     const v = getValueFromRow(table.rows[i], colIndex);
     if (v != null && String(v).trim() !== '') {
       const item = { value: String(v).trim(), dim: false };
-      if (dimColIndex >= 0) {
+      if (dimmedKeys) {
+        item.dim = dimmedKeys.has(normalizeModeloLote(v));
+      } else if (dimColIndex >= 0) {
         const dimVal = getValueFromRow(table.rows[i], dimColIndex);
         item.dim = dimVal != null && String(dimVal).trim() !== '';
       }
@@ -2633,6 +2690,7 @@ function buildZonaSingleCard(config, value) {
 function renderZones(rowData) {
   const cachedPcRecords = ZONA_LIST_CACHE['lots|pc'];
   zg.classList.remove('no-envolventes');
+  zg.classList.toggle('has-subcontratacao', hasZoneProgress(cachedPcRecords, 'subcontratacao'));
   if (Array.isArray(cachedPcRecords)) {
     const hasEnvolventes = cachedPcRecords.some(record => {
       const value = record.envolventes;
@@ -2688,17 +2746,20 @@ function renderZones(rowData) {
         const value = record[config.lotField];
         return value != null && String(value).trim() !== '';
       });
-      if (config.hideWhenEmpty && !cachedHasValue) card.hidden = true;
+      const cachedHasProgress = hasZoneProgress(cached, config.lotField);
+      if ((config.hideWhenEmpty && !cachedHasValue) || (config.hideWhenZero && !cachedHasProgress)) card.hidden = true;
       zg.appendChild(card);
 
       fetchPcLotRecords().then(records => {
         ZONA_LIST_CACHE[cacheKey] = records;
+        const hasProgress = hasZoneProgress(records, config.lotField);
         const hasValue = records.some(record => {
           const value = record[config.lotField];
           return value != null && String(value).trim() !== '';
         });
         if (config.hideWhenEmpty) zg.classList.toggle('no-envolventes', !hasValue);
-        if (config.hideWhenEmpty && !hasValue) {
+        if (config.hideWhenZero) zg.classList.toggle('has-subcontratacao', hasProgress);
+        if ((config.hideWhenEmpty && !hasValue) || (config.hideWhenZero && !hasProgress)) {
           card.remove();
           return;
         }
