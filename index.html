@@ -2196,12 +2196,12 @@ const PC_LOT_FIELDS = {
   envolventes: 'P',
   subcontratacao: 'Q',
   geral: 'L',
-  prioridadeT: 'R',
-  prioridadeCX: 'S',
-  prioridade1: 'T',
-  prioridade2: 'U',
-  prioridade3: 'V',
-  prioridade4: 'W',
+  prioridadeT: 'X',
+  prioridadeCX: 'Y',
+  prioridade1: 'Z',
+  prioridade2: 'AA',
+  prioridade3: 'AB',
+  prioridade4: 'AC',
 };
 const ACTIVE_PRIORITY_FIELDS = [
   { field: 'prioridadeT', label: 'T' },
@@ -3050,7 +3050,7 @@ function renderActivePriorities(records) {
   const hasMultipleLots = records.length > 1;
   const priorities = records.flatMap(record => ACTIVE_PRIORITY_FIELDS.flatMap(({ field, label }) => {
     const pct = parseSheetPercentage(record[field]);
-    if (pct == null || pct <= 0 || pct >= 100) return [];
+    if (pct == null || pct < 0 || pct >= 100) return [];
     return [{ record, label, pct }];
   }));
 
