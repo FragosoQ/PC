@@ -2446,6 +2446,7 @@ async function fetchZonaListValues(source) {
         const geral = getValueFromRow(row, 0);
         if (geral == null || String(geral).trim() === '') return false;
         if (source.mode === 'nonempty-column-headers' && parseSheetPercentage(geral) === 100) return false;
+        if (source.mode === 'completed-column-headers' && isSheetPercentageComplete(geral)) return false;
         const value = getValueFromRow(row, columnIndex);
         if (source.mode === 'completed-column-headers') return isSheetPercentageComplete(value);
         return value != null && String(value).trim() !== '' && parseSheetPercentage(value) !== 100;
