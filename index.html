@@ -1660,6 +1660,15 @@ function getDeadlineInfo(startDate, dueDate, todayDate = new Date()) {
   };
 }
 
+function isDeadlineOverdue(dueValue, today = new Date()) {
+  const due = parseSheetDate(dueValue);
+  const currentDay = parseSheetDate(today);
+  if (!due || !currentDay) return false;
+  due.setHours(0, 0, 0, 0);
+  currentDay.setHours(0, 0, 0, 0);
+  return currentDay > due;
+}
+
 /**
  * Retorna o emoji da bandeira baseado no nome do país
  * @param {String} countryName - Nome do país
@@ -2148,6 +2157,7 @@ const ZONA_CONFIGS = [
       range: 'L1:AC1000',
       mode: 'completed-column-headers',
       columns: ['X', 'Y', 'Z', 'AA', 'AB', 'AC'],
+      labels: ['T', 'CX', '1', '2', '3', '4'],
       hideHeader: true,
       gridLayout: { cols: 3, rows: 2, flow: 'row' },
     },
@@ -2163,7 +2173,7 @@ const ZONA_CONFIGS = [
       tab: 'PC',
       range: 'L1:AC1000',
       mode: 'nonempty-column-headers',
-      columns: ['R', 'S', 'T', 'U', 'V', 'W'],
+      columns: ['X', 'Y', 'Z', 'AA', 'AB', 'AC'],
       labels: ['T', 'CX', '1', '2', '3', '4'],
       hideHeader: true,
       gridLayout: { cols: 3, rows: 2, flow: 'row' },
@@ -2434,17 +2444,19 @@ async function fetchZonaListValues(source) {
 
       const hasMatchingValue = table.rows.slice(1).some(row => {
         const geral = getValueFromRow(row, 0);
-        if (geral == null || String(geral).trim() === '' || parseSheetPercentage(geral) === 100) return false;
+        if (geral == null || String(geral).trim() === '') return false;
+        if (source.mode === 'nonempty-column-headers' && parseSheetPercentage(geral) === 100) return false;
         const value = getValueFromRow(row, columnIndex);
         if (source.mode === 'completed-column-headers') return isSheetPercentageComplete(value);
-        return parseSheetPercentage(value) > 0;
+        return value != null && String(value).trim() !== '' && parseSheetPercentage(value) !== 100;
       });
       if (!hasMatchingValue) return;
 
       const header = getValueFromRow(table.rows[0], columnIndex);
-      const label = source.mode === 'nonempty-column-headers'
-        ? (source.labels?.[index] || String(header || '').replace(/\s*\[STATUS\]\s*$/i, '').trim())
-        : String(header || '').trim();
+      const label = source.labels?.[index] ||
+        (source.mode === 'nonempty-column-headers'
+          ? String(header || '').replace(/\s*\[STATUS\]\s*$/i, '').trim()
+          : String(header || '').trim());
       if (label && !seen.has(label)) {
         seen.add(label);
         values.push(label);
@@ -2902,7 +2914,8 @@ function updateDeadline(startValue, dueValue) {
   }
 
   const ratio = total > 0 ? Math.min(1, used / total) : 0;
-  const pc = ratio >= .9 ? '#ff3b3b' : ratio >= .7 ? '#ffaa00' : '#00ff87';
+  const overdue = isDeadlineOverdue(dueValue, today);
+  const pc = overdue ? '#ff3b3b' : ratio >= .7 ? '#ffaa00' : '#00ff87';
 
   if (prazoUsedEl) {
     prazoUsedEl.textContent = used;
@@ -2915,7 +2928,7 @@ function updateDeadline(startValue, dueValue) {
   }
   if (folgaEl) {
     folgaEl.textContent = `${remaining} dias restantes`;
-    folgaEl.style.color = remaining <= 1 ? '#ff3b3b' : remaining <= 3 ? '#ffaa00' : '#00ff87';
+    folgaEl.style.color = overdue ? '#ff3b3b' : remaining <= 3 ? '#ffaa00' : '#00ff87';
   }
   if (prazoTotalEl) {
     prazoTotalEl.textContent = total;
@@ -2944,10 +2957,11 @@ function computeDeadline(startValue, dueValue) {
   const remaining = getWorkDaysCount(today, dueValue, false);
   if (total == null || used == null || remaining == null) return null;
   const ratio = total > 0 ? Math.min(1, used / total) : 0;
+  const overdue = isDeadlineOverdue(dueValue, today);
   return {
     total, used, remaining, ratio,
-    pc: ratio >= .9 ? '#ff3b3b' : ratio >= .7 ? '#ffaa00' : '#00ff87',
-    folgaColor: remaining <= 1 ? '#ff3b3b' : remaining <= 3 ? '#ffaa00' : '#00ff87',
+    pc: overdue ? '#ff3b3b' : ratio >= .7 ? '#ffaa00' : '#00ff87',
+    folgaColor: overdue ? '#ff3b3b' : remaining <= 3 ? '#ffaa00' : '#00ff87',
   };
 }
 
