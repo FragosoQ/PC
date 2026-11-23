@@ -2212,15 +2212,9 @@ const PC_LOT_FIELDS = {
   prioridade2: 'AA',
   prioridade3: 'AB',
   prioridade4: 'AC',
+  prioridadeEmCurso: 'V',
+  prioridadeEmCursoPct: 'W',
 };
-const ACTIVE_PRIORITY_FIELDS = [
-  { field: 'prioridadeT', label: 'T' },
-  { field: 'prioridadeCX', label: 'CX' },
-  { field: 'prioridade1', label: '1' },
-  { field: 'prioridade2', label: '2' },
-  { field: 'prioridade3', label: '3' },
-  { field: 'prioridade4', label: '4' },
-];
 let pcLotRecordsInflight = null;
 
 function lotColor(lotIndex) {
@@ -3068,11 +3062,13 @@ function renderMultiEvolucao(records) {
 function renderActivePriorities(records) {
   if (!activePrioritiesEl) return;
   const hasMultipleLots = records.length > 1;
-  const priorities = records.flatMap(record => ACTIVE_PRIORITY_FIELDS.flatMap(({ field, label }) => {
-    const pct = parseSheetPercentage(record[field]);
-    if (pct == null || pct <= 0 || pct >= 100) return [];
+  // Prioridade em curso: nome na coluna V, percentagem na coluna W.
+  const priorities = records.flatMap(record => {
+    const label = record.prioridadeEmCurso == null ? '' : String(record.prioridadeEmCurso).trim();
+    if (!label) return [];
+    const pct = parseSheetPercentage(record.prioridadeEmCursoPct);
     return [{ record, label, pct }];
-  }));
+  });
 
   activePrioritiesEl.hidden = priorities.length === 0;
   if (!priorities.length) {
@@ -3082,7 +3078,7 @@ function renderActivePriorities(records) {
 
   const badges = priorities.map(({ record, label, pct }) => {
     const lot = hasMultipleLots ? `${lotShortName(record.lot)} · ` : '';
-    return `<span class="active-priority" style="--priority-color:${lotColor(record.lotIndex)}">${escapeHtml(lot)}${escapeHtml(label)} · ${pct}%</span>`;
+    return `<span class="active-priority" style="--priority-color:${lotColor(record.lotIndex)}">${escapeHtml(lot)}${escapeHtml(label)}${pct != null ? ` · ${pct}%` : ''}</span>`;
   }).join('');
   activePrioritiesEl.innerHTML = `
     <span class="active-priorities-title">Prioridades em curso</span>
