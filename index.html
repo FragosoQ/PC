@@ -2212,9 +2212,24 @@ const PC_LOT_FIELDS = {
   prioridade2: 'AA',
   prioridade3: 'AB',
   prioridade4: 'AC',
-  prioridadeEmCurso: 'V',
-  prioridadeEmCursoPct: 'W',
+  statusT: 'R',
+  statusCX: 'S',
+  status1: 'T',
+  status2: 'U',
+  status3: 'V',
+  status4: 'W',
 };
+
+// PC!R:W — cabeçalhos "T [STATUS]" … "4 [STATUS]", percentagem por lote.
+// Uma prioridade está em curso quando a percentagem está entre 0% e 100% (exclusive).
+const PRIORITY_STATUS_COLUMNS = [
+  { label: 'T', field: 'statusT' },
+  { label: 'CX', field: 'statusCX' },
+  { label: '1', field: 'status1' },
+  { label: '2', field: 'status2' },
+  { label: '3', field: 'status3' },
+  { label: '4', field: 'status4' },
+];
 let pcLotRecordsInflight = null;
 
 function lotColor(lotIndex) {
@@ -3062,13 +3077,13 @@ function renderMultiEvolucao(records) {
 function renderActivePriorities(records) {
   if (!activePrioritiesEl) return;
   const hasMultipleLots = records.length > 1;
-  // Prioridade em curso: nome na coluna V, percentagem na coluna W.
-  const priorities = records.flatMap(record => {
-    const label = record.prioridadeEmCurso == null ? '' : String(record.prioridadeEmCurso).trim();
-    if (!label) return [];
-    const pct = parseSheetPercentage(record.prioridadeEmCursoPct);
-    return [{ record, label, pct }];
-  });
+  // Prioridades em curso: colunas PC!R:W com percentagem entre 0% e 100%.
+  const priorities = records.flatMap(record =>
+    PRIORITY_STATUS_COLUMNS.flatMap(({ label, field }) => {
+      const pct = parseSheetPercentage(record[field]);
+      if (pct == null || pct <= 0 || pct >= 100) return [];
+      return [{ record, label, pct }];
+    }));
 
   activePrioritiesEl.hidden = priorities.length === 0;
   if (!priorities.length) {
