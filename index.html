@@ -2259,8 +2259,12 @@ function fetchPcLotRecords() {
       rows.slice(1).forEach(row => {
         const lot = getValueFromRow(row, offsets.lot);
         if (lot == null || String(lot).trim() === '') return;
-        const geral = getValueFromRow(row, offsets.geral);
-        if (geral == null || String(geral).trim() === '' || parseSheetPercentage(geral) === 100) return;
+        // Modelo / Equipamento em curso: só linhas com data em F (INÍCIO SERRALHARIA).
+        const inicio = getValueFromRow(row, offsets.inicio);
+        if (inicio == null || String(inicio).trim() === '' || !parseSheetDate(inicio)) return;
+        // ...e excluir as que já têm data em G (FIM SERRALHARIA).
+        const fim = getValueFromRow(row, columnLetterToIndex('G') - startIdx);
+        if (fim != null && String(fim).trim() !== '' && parseSheetDate(fim)) return;
         const record = {};
         Object.keys(offsets).forEach(key => {
           record[key] = getValueFromRow(row, offsets[key]);
@@ -3676,16 +3680,23 @@ updateTime(); setInterval(updateTime, 1000);
   function applyHeight() {
     const total = zonas.getBoundingClientRect().height;
     if (total <= 0) return;
-    // Split: 65% prazo / 25% details — soma 90% do zonas-panel (10% libertado)
-    prazo.style.height = `${total * 0.65}px`;
-    details.style.height = `${total * 0.25}px`;
+    // Split: 65% prazo / 25% details — soma 90% do zonas-panel (10% libertado).
+    // Details usa min-height para poder crescer (multi-lote empilha Início/Previsto);
+    // o excesso é retirado ao prazo, para não cortar o conteúdo.
+    details.style.height = '';
+    details.style.minHeight = `${total * 0.25}px`;
+    const detailsH = details.getBoundingClientRect().height;
+    prazo.style.height = `${Math.max(total * 0.9 - detailsH, total * 0.4)}px`;
   }
 
   // Aplica imediatamente e ao redimensionar
   applyHeight();
   window.addEventListener('resize', applyHeight);
   if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(applyHeight).observe(zonas);
+    const ro = new ResizeObserver(() => requestAnimationFrame(applyHeight));
+    ro.observe(zonas);
+    // Re-calcula quando o conteúdo de Início/Previsto muda (1 ↔ N lotes)
+    ro.observe(details.querySelector('.details-inner') || details);
   }
 })();
 
